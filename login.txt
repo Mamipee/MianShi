@@ -1,0 +1,216 @@
+package BOOT-INF.classes.cn.hsz.controller;
+
+import cn.hsz.pojo.LoginBody;
+import cn.hsz.pojo.Shop;
+import cn.hsz.pojo.Users;
+import cn.hsz.service.WxService;
+import cn.hsz.utils.HttpClientUtil;
+import cn.hsz.utils.WxUserOpenInfoDecodeUtil;
+import cn.hutool.jwt.JWTUtil;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+import java.util.Map;
+import net.sf.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping({"wechat"})
+@Api(value = ", tags = {"controller"})
+public class WxController {
+  @Autowired
+  private WxService wxService;
+  
+  private String sessionKey = null;
+  
+  @GetMapping({"normalLogin"})
+  @ApiOperation(value = ", notes = " 999 998997  800 ")
+  @ApiImplicitParam(name = "JSCODE", value = "code, required = true, dataType = "varchar", paramType = "query")
+  public ResponseEntity normalLogin(@RequestParam("JSCODE") String JSCODE) {
+    if (JSCODE == null)
+      return ResponseEntity.status(400).build(); 
+    Map<String, String> params = new HashMap<>();
+    params.put("appid", "wxfe6a331e4980d7ca");
+    params.put("secret", "df76c271ebff44164044c3f60e955891");
+    params.put("js_code", JSCODE);
+    params.put("grant_type", "authorization_code");
+    String wxRequestResult = null;
+    try {
+      wxRequestResult = HttpClientUtil.doGet("https://api.weixin.qq.com/sns/jscode2session?", params);
+      String openIdStr = JSONObject.fromObject(wxRequestResult).get("openid").toString();
+      this.sessionKey = JSONObject.fromObject(wxRequestResult).get("session_key").toString();
+      if (openIdStr == null || openIdStr == "")
+        return ResponseEntity.status(997).build(); 
+      if (this.sessionKey == null || this.sessionKey == "")
+        return ResponseEntity.status(999).build(); 
+      Integer exist = this.wxService.hasOpenId(openIdStr);
+      if (exist.intValue() == 1) {
+        Users users = this.wxService.findUserInfoByPid(openIdStr);
+        if (users == null)
+          return ResponseEntity.status(500).build(); 
+        LoginBody loginBody1 = new LoginBody();
+        loginBody1.setUserId(users.getId());
+        loginBody1.setWxRequestResult(wxRequestResult);
+        HashMap<String, Object> hashMap = new HashMap<>();
+        hashMap.put("openid", openIdStr);
+        hashMap.put("userId", users.getId());
+        String str = JWTUtil.createToken(hashMap, "youp".getBytes(StandardCharsets.UTF_8));
+        loginBody1.setToken(str);
+        return ResponseEntity.ok(loginBody1);
+      } 
+      int i = this.wxService.savaWxUser(openIdStr);
+      if (i <= 0)
+        return ResponseEntity.status(500).build(); 
+      Users usersInfo = this.wxService.findUserInfoByPid(openIdStr);
+      if (usersInfo == null)
+        return ResponseEntity.status(500).build(); 
+      LoginBody loginBody = new LoginBody();
+      loginBody.setUserId(usersInfo.getId());
+      loginBody.setWxRequestResult(wxRequestResult);
+      HashMap<String, Object> payload = new HashMap<>();
+      payload.put("openid", openIdStr);
+      payload.put("userId", usersInfo.getId());
+      String token = JWTUtil.createToken(payload, "youp".getBytes(StandardCharsets.UTF_8));
+      loginBody.setToken(token);
+      return ResponseEntity.ok(loginBody);
+    } catch (KeyStoreException e) {
+      e.printStackTrace();
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+    } catch (KeyManagementException e) {
+      e.printStackTrace();
+    } 
+    return ResponseEntity.unprocessableEntity().build();
+  }
+  
+  @GetMapping({"authorizeLogin"})
+  @ApiOperation(value = ", notes = " 999 998997  800 ")
+  @ApiImplicitParams({@ApiImplicitParam(name = "JSCODE", value = "code, required = true, dataType = "varchar", paramType = "query"), @ApiImplicitParam(name = "ShopId", value = "ShopId", required = true, dataType = "Integer", paramType = "query")})
+  public ResponseEntity authorizeLogin(@RequestParam("JSCODE") String JSCODE, @RequestParam("ShopId") Integer ShopId) {
+    if (JSCODE == null || ShopId == null)
+      return ResponseEntity.status(400).build(); 
+    Map<String, String> params = new HashMap<>();
+    params.put("appid", "wxfe6a331e4980d7ca");
+    params.put("secret", "df76c271ebff44164044c3f60e955891");
+    params.put("js_code", JSCODE);
+    params.put("grant_type", "authorization_code");
+    String wxRequestResult = null;
+    try {
+      wxRequestResult = HttpClientUtil.doGet("https://api.weixin.qq.com/sns/jscode2session?", params);
+      System.out.println("code+ wxRequestResult);
+      String openIdStr = JSONObject.fromObject(wxRequestResult).get("openid").toString();
+      this.sessionKey = JSONObject.fromObject(wxRequestResult).get("session_key").toString();
+      if (openIdStr == null || openIdStr == "")
+        return ResponseEntity.status(997).build(); 
+      if (this.sessionKey == null || this.sessionKey == "")
+        return ResponseEntity.status(999).build(); 
+      Integer exist = this.wxService.hasOpenId(openIdStr);
+      if (exist.intValue() == 1) {
+        Users usersInfo = this.wxService.findUserInfoByPid(openIdStr);
+        if (usersInfo == null)
+          return ResponseEntity.status(500).build(); 
+        LoginBody loginBody = new LoginBody();
+        loginBody.setUserId(usersInfo.getId());
+        loginBody.setWxRequestResult(wxRequestResult);
+        HashMap<String, Object> payload = new HashMap<>();
+        payload.put("openid", openIdStr);
+        payload.put("userId", usersInfo.getId());
+        String token = JWTUtil.createToken(payload, "youp".getBytes(StandardCharsets.UTF_8));
+        if (token == null)
+          loginBody.setToken("no_content"); 
+        loginBody.setToken(token);
+        return ResponseEntity.ok(loginBody);
+      } 
+      if (exist.intValue() == 0) {
+        int i = this.wxService.savaWxUser(openIdStr);
+        if (i <= 0)
+          return ResponseEntity.status(500).build(); 
+        Integer count = this.wxService.checkSameOpenid(openIdStr);
+        if (count.intValue() > 0) {
+          Users users = this.wxService.findUserInfoByPid(openIdStr);
+          if (users == null)
+            return ResponseEntity.status(500).build(); 
+          LoginBody loginBody1 = new LoginBody();
+          loginBody1.setUserId(users.getId());
+          loginBody1.setWxRequestResult(wxRequestResult);
+          HashMap<String, Object> hashMap = new HashMap<>();
+          hashMap.put("openid", openIdStr);
+          hashMap.put("userId", users.getId());
+          String str = JWTUtil.createToken(hashMap, "youp".getBytes(StandardCharsets.UTF_8));
+          if (str == null)
+            loginBody1.setToken("no_content"); 
+          loginBody1.setToken(str);
+          return ResponseEntity.ok(loginBody1);
+        } 
+        Integer success = this.wxService.bondUserAndShop(openIdStr, ShopId);
+        if (success.intValue() < 1)
+          return ResponseEntity.status(998).build(); 
+        Users usersInfo = this.wxService.findUserInfoByPid(openIdStr);
+        LoginBody loginBody = new LoginBody();
+        loginBody.setUserId(usersInfo.getId());
+        loginBody.setWxRequestResult(wxRequestResult);
+        HashMap<String, Object> payload = new HashMap<>();
+        payload.put("openid", openIdStr);
+        payload.put("userId", usersInfo.getId());
+        String token = JWTUtil.createToken(payload, "youp".getBytes(StandardCharsets.UTF_8));
+        if (token == null)
+          loginBody.setToken("no_content"); 
+        loginBody.setToken(token);
+        return ResponseEntity.ok(loginBody);
+      } 
+      return ResponseEntity.status(500).build();
+    } catch (KeyStoreException e) {
+      e.printStackTrace();
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+    } catch (KeyManagementException e) {
+      e.printStackTrace();
+    } 
+    return ResponseEntity.unprocessableEntity().build();
+  }
+  
+  @GetMapping({"getUserInfoFromWx"})
+  @ApiOperation(value = ", notes = ")
+  @ApiImplicitParams({@ApiImplicitParam(name = "encrydata", value = "encrydata", required = true, dataType = "String", paramType = "query"), @ApiImplicitParam(name = "ivdata", value = "ivdata", required = true, dataType = "String", paramType = "query")})
+  public ResponseEntity getUserInfoFromWx(@RequestParam("encrydata") String encrydata, @RequestParam("ivdata") String ivdata) {
+    if (this.sessionKey == null)
+      return ResponseEntity.status(999).build(); 
+    JSONObject userInfo = WxUserOpenInfoDecodeUtil.getUserInfo(encrydata, this.sessionKey, ivdata);
+    if (userInfo != null)
+      return ResponseEntity.ok(userInfo); 
+    return ResponseEntity.noContent().build();
+  }
+  
+  @GetMapping({"hasBond"})
+  @ApiOperation(value = ", notes = " 1  0 )
+  @ApiImplicitParams({@ApiImplicitParam(name = "shopId", value = "shopId", required = true, dataType = "Integer", paramType = "query"), @ApiImplicitParam(name = "openid", value = "openid", required = true, dataType = "String", paramType = "query")})
+  public ResponseEntity hasBond(@RequestParam("shopId") Integer shopId, @RequestParam("openid") String openid) {
+    Boolean bond = this.wxService.checkHasBond(shopId, openid);
+    if (shopId == null || openid == null)
+      return ResponseEntity.status(400).build(); 
+    if (bond.booleanValue())
+      return ResponseEntity.ok("1"); 
+    return ResponseEntity.ok("0");
+  }
+  
+  @GetMapping({"identity"})
+  @ApiOperation(value = ", notes = " )
+  @ApiImplicitParam(name = "openid", value = "openid", required = true, dataType = "String", paramType = "query")
+  public ResponseEntity identity(@RequestParam("openid") String openid) {
+    Shop shop = this.wxService.checkUserInShare(openid);
+    if (shop == null)
+      return ResponseEntity.ok("6"); 
+    return ResponseEntity.ok(shop.getPid());
+  }
+}
